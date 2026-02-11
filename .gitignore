@@ -1,3 +1,23 @@
+# Virtual environment
 venv/
-__pycache__/
 .env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# VS Code
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# FAISS index (if generated locally)
+*.faiss
+*.pkl
