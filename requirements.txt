@@ -1,5 +1,7 @@
 fastapi==0.110.0
 uvicorn[standard]==0.29.0
+gunicorn
+
 
 langchain==0.2.6
 langchain-community==0.2.6
