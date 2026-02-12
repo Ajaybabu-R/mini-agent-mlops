@@ -8,8 +8,10 @@ from app.db.vector_store import create_vector_store
 from app.graph import build_graph
 from app.models import ClassificationRequest, ClassificationResponse
 
+# Load environment variables
 load_dotenv()
 
+# Logging configuration
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
@@ -17,11 +19,14 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# FastAPI app
 app = FastAPI(title="Mini Agent MLOps Project")
 
+# Initialize components
 vector_store = create_vector_store()
 graph = build_graph()
 
+# Initialize Langfuse
 langfuse = Langfuse(
     public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
     secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
@@ -42,34 +47,41 @@ async def classify_product(request: ClassificationRequest):
     try:
         logger.info(f"Received query: {request.query}")
 
+        # 🔥 Create root trace with input
         trace = langfuse.trace(
             name="mini-agent-trace",
-            input={"query": request.query}
+            input={"query": request.query},
+            metadata={
+                "environment": os.getenv("ENVIRONMENT", "dev"),
+                "service": "mini-agent-api"
+            }
         )
 
+        # Build state
         state = {
             "query": request.query,
             "vector_store": vector_store,
             "trace": trace
         }
 
+        # Execute LangGraph
         result = graph.invoke(state)
 
-        trace.update(output={
-            "query": result.get("query"),
-            "retrieved_docs": result.get("retrieved_docs"),
-            "compliance_result": result.get("compliance_result")
-        })
-
-        response = ClassificationResponse(
-            query=result.get("query"),
-            retrieved_docs=result.get("retrieved_docs"),
-            compliance_result=result.get("compliance_result")
+        # 🔥 Update trace with final output
+        trace.update(
+            output={
+                "retrieved_docs": result.get("retrieved_docs"),
+                "compliance_result": result.get("compliance_result")
+            }
         )
 
         logger.info("Classification successful")
 
-        return response
+        return ClassificationResponse(
+            query=result.get("query"),
+            retrieved_docs=result.get("retrieved_docs"),
+            compliance_result=result.get("compliance_result")
+        )
 
     except Exception as e:
         logger.error(f"Error during classification: {str(e)}")
@@ -80,4 +92,14 @@ async def classify_product(request: ClassificationRequest):
         raise HTTPException(status_code=500, detail="Internal processing error")
 
     finally:
-        langfuse.flush()
+        # 🔥 Important for Azure
+        try:
+            if trace:
+                trace.end()
+        except Exception:
+            pass
+
+        try:
+            langfuse.flush()
+        except Exception as flush_error:
+            logger.error(f"Langfuse flush failed: {flush_error}")
