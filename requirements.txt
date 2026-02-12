@@ -1,6 +1,6 @@
 fastapi==0.110.0
-uvicorn[standard]==0.29.0
-gunicorn # For production deployment
+uvicorn[standard]==0.29.0 # For local development and testing
+gunicorn # For azure deployment
 
 
 langchain==0.2.6

@@ -10,7 +10,6 @@ from app.models import ClassificationRequest, ClassificationResponse
 
 load_dotenv()
 
-# Logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
@@ -38,10 +37,15 @@ def health_check():
 @app.post("/classify", response_model=ClassificationResponse)
 async def classify_product(request: ClassificationRequest):
 
+    trace = None
+
     try:
         logger.info(f"Received query: {request.query}")
 
-        trace = langfuse.trace(name="mini-agent-trace")
+        trace = langfuse.trace(
+            name="mini-agent-trace",
+            input={"query": request.query}
+        )
 
         state = {
             "query": request.query,
@@ -51,7 +55,11 @@ async def classify_product(request: ClassificationRequest):
 
         result = graph.invoke(state)
 
-        trace.update(output=result)
+        trace.update(output={
+            "query": result.get("query"),
+            "retrieved_docs": result.get("retrieved_docs"),
+            "compliance_result": result.get("compliance_result")
+        })
 
         response = ClassificationResponse(
             query=result.get("query"),
@@ -65,4 +73,11 @@ async def classify_product(request: ClassificationRequest):
 
     except Exception as e:
         logger.error(f"Error during classification: {str(e)}")
+
+        if trace:
+            trace.update(output={"error": str(e)})
+
         raise HTTPException(status_code=500, detail="Internal processing error")
+
+    finally:
+        langfuse.flush()
